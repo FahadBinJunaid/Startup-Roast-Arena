@@ -66,10 +66,11 @@ Last updated: Phase 8 (Deployment preparation)
 - ✅ `backend/.env.example` sanitized (placeholder only) + `CLIENT_URL` added
 - ✅ Optional env-based CORS added to `backend/index.js`
 - ✅ Deployment guide written in `PROJECT_GUIDE.md` (§16)
+- ✅ Backend made Vercel-compatible: `export default app`, guarded `app.listen()`, DB-ensure middleware, cached/reusable Mongo connection
 - ⬜ Browser manual walkthrough (owner)
 - ⬜ Responsive check (owner)
 - ⬜ GitHub push (owner, manual)
-- ⬜ Deploy backend (Render) (owner, manual)
+- ⬜ Deploy backend (Vercel) (owner, manual)
 - ⬜ Deploy frontend (Vercel) (owner, manual)
 - ⬜ Verify live app (owner)
 
@@ -78,5 +79,5 @@ Last updated: Phase 8 (Deployment preparation)
 ## Needs from owner
 - ⬜ Approve deployment (nothing will be deployed without it)
 - ⬜ GitHub repository (create + push)
-- ⬜ Render account/URL for the backend
+- ⬜ Vercel account/URL for the backend
 - ⬜ Vercel account/URL for the frontend

@@ -118,7 +118,7 @@ Classic **MVC-style** backend with a separate React frontend.
 Browser (React + Vite)
         │  Axios (JSON + Bearer JWT)
         ▼
-Express API (Render)
+Express API (Vercel)
         │  Mongoose
         ▼
 MongoDB Atlas
@@ -488,32 +488,54 @@ Test list:
 | Part | Host | Root folder |
 |---|---|---|
 | Database | MongoDB Atlas | — |
-| Backend API | Render | `backend/` |
+| Backend API | Vercel | `backend/` |
 | Frontend | Vercel | `frontend/` |
 | Source code | GitHub | repository root |
 
 Nothing is deployed yet. The steps below are for manual setup.
 
-### 16.1 Backend → Render
+### 16.1 Backend → Vercel
+
+Vercel ships **zero-configuration detection for Express**. You do not need a
+`vercel.json` file, a build command, or an output directory. Vercel looks for
+`index.js` inside the configured **Root Directory** and expects it to export
+the Express app. Our `backend/index.js` does exactly that with
+`export default app`.
+
+> Do **not** add a `vercel.json` with `rewrites`, and do **not** create an
+> `api/` folder. Those are common mistakes that cause the error
+> `No exports found in module ".../index.js"`.
 
 - **Repository:** Startup Roast Arena
-- **Root Directory:** `backend`
-- **Build Command:** `npm install`
-- **Start Command:** `npm start`  (this runs `node index.js`)
-- **Environment variables to add on Render:**
+- **Root Directory:** `backend`  ← this is what makes Vercel find `backend/index.js`
+- **Framework Preset:** Other (Vercel auto-detects Express)
+- **Build Command:** leave empty (Vercel handles it)
+- **Output Directory:** leave empty
+- **Environment variables to add on Vercel:**
   | Variable | Value |
   |---|---|
   | `MONGO_URI` | your MongoDB Atlas connection string |
   | `JWT_SECRET` | a long random secret |
   | `GEMINI_API_KEY` | your Google Gemini API key |
   | `GEMINI_MODEL` | `gemini-3.5-flash` (optional, this is the default) |
-  | `CLIENT_URL` | your Vercel frontend URL (e.g. `https://your-app.vercel.app`) |
+  | `CLIENT_URL` | your frontend URL (e.g. `https://your-app.vercel.app`) |
   | `NODE_ENV` | `production` |
 
-  Do **not** set `PORT` on Render — Render provides it automatically and the
-  server already uses `process.env.PORT` with a fallback to `5000`.
+  Do **not** set `PORT` on Vercel — Vercel assigns the port automatically.
+  Local development still uses `process.env.PORT` with a fallback to `5000`.
 
 - The health check is `GET /api/health` (returns `{ "status": "ok", "database": "connected" }`).
+
+How the backend is serverless-safe:
+
+- `backend/index.js` exports the app with `export default app`.
+- `app.listen()` only runs when `process.env.VERCEL` is **not** set, so local
+  `npm run dev` / `npm start` still start a normal server.
+- A small middleware calls `connectDB()` before every route, so MongoDB is
+  connected before any request is handled on a cold start.
+- `backend/config/db.js` caches the connection promise and reuses it instead
+  of opening a new connection on every serverless invocation. It throws on
+  failure instead of calling `process.exit()`, which would crash the function.
 
 ### 16.2 Frontend → Vercel
 
@@ -525,18 +547,23 @@ Nothing is deployed yet. The steps below are for manual setup.
 - **Environment variable to add on Vercel:**
   | Variable | Value |
   |---|---|
-  | `VITE_API_URL` | `https://<your-render-service>.onrender.com/api` |
+  | `VITE_API_URL` | `https://<your-backend>.vercel.app/api` |
 
   The `/api` suffix is required. The frontend reads this at build time via
   `import.meta.env.VITE_API_URL` (see `frontend/src/services/api.js`).
 
-### 16.3 Connecting the Vercel frontend to the Render backend
+### 16.3 Connecting the frontend to the backend
 
-1. Deploy the backend first and copy its URL (e.g. `https://sra-api.onrender.com`).
-2. In Vercel, set `VITE_API_URL = https://sra-api.onrender.com/api`.
-3. Copy the Vercel URL (e.g. `https://sra.vercel.app`).
-4. In Render, set `CLIENT_URL = https://sra.vercel.app` so the backend only
-   accepts requests from your deployed frontend.
+Both are deployed on Vercel, so create **two Vercel projects** from the same
+GitHub repository — one with Root Directory `backend`, one with `frontend`.
+
+1. Deploy the **backend** project first and copy its URL
+   (e.g. `https://sra-api.vercel.app`).
+2. In the **frontend** project, set
+   `VITE_API_URL = https://sra-api.vercel.app/api`.
+3. Copy the **frontend** URL (e.g. `https://sra.vercel.app`).
+4. In the **backend** project, set `CLIENT_URL = https://sra.vercel.app` so the
+   backend only accepts requests from your deployed frontend.
 5. Redeploy the frontend after changing `VITE_API_URL` (Vite bakes env vars in
    at build time).
 
@@ -544,10 +571,10 @@ Nothing is deployed yet. The steps below are for manual setup.
 
 - **CORS:** the backend uses `cors()` with the origin taken from `CLIENT_URL`.
   When `CLIENT_URL` is empty (local development), all origins are allowed.
-  Set `CLIENT_URL` to your Vercel URL in production.
-- **MongoDB Atlas Network Access:** add `0.0.0.0/0` to the IP Access List (or
-  Render's outbound IPs) so the Render server can reach the database. This is
-  the simplest option for a class project.
+  Set `CLIENT_URL` to your frontend URL in production.
+- **MongoDB Atlas Network Access:** add `0.0.0.0/0` to the IP Access List so
+  the Vercel serverless functions can reach the database. This is the simplest
+  option for a class project.
 - **MongoDB Atlas Database Access:** make sure a database user exists and its
   credentials are part of `MONGO_URI`.
 - Never commit API keys or database passwords; keep them in the host dashboards
@@ -602,4 +629,5 @@ Nothing is deployed yet. The steps below are for manual setup.
 | Phase 5 | Added `models/Vote.js` (unique index idea+user), `controllers/voteController.js`, `routes/voteRoutes.js`; added `optionalAuth` middleware. |
 | Phase 6 | Added `controllers/leaderboardController.js` (70/30 formula) + `routes/leaderboardRoutes.js`; re-pitch versioning verified. |
 | Phase 7 | Built full React frontend: design system (`index.css`, `App.css`), `services/api.js`, `context/AuthContext.jsx`, components (Navbar, Footer, IdeaCard, InvestorReviewCard, RoastBadge, Loader, ErrorMessage, EmptyState, ProtectedRoute) and pages (Landing, Register, Login, Dashboard, SubmitIdea, IdeaDetails, Leaderboard, MyIdeas, NotFound); routing in `App.jsx`, providers in `main.jsx`; added `frontend/.env.example` and `.env` to `.gitignore`. `npm run build` and `npm run lint` pass. |
-| Phase 8 (prep) | Deployment preparation: added root `.gitignore`, expanded `backend/.gitignore` + `frontend/.gitignore`; sanitized `backend/.env.example` (removed real cluster host, added `CLIENT_URL`); added optional env-based CORS in `backend/index.js`; documented the full Render/Vercel deployment guide. |
+| Phase 8 (prep) | Deployment preparation: added root `.gitignore`, expanded `backend/.gitignore` + `frontend/.gitignore`; sanitized `backend/.env.example` (removed real cluster host, added `CLIENT_URL`); added optional env-based CORS in `backend/index.js`; documented the full Vercel/Vercel deployment guide. |
+| Phase 8 (Vercel fix) | Made the backend Vercel-compatible: `backend/index.js` now `export default app` and only calls `app.listen()` when `process.env.VERCEL` is not set; added a DB-ensure middleware that calls `connectDB()` before routes; rewrote `backend/config/db.js` to cache/reuse the Mongoose connection and throw instead of `process.exit()`. Backend moved from Render to Vercel (no `vercel.json`, no `api/` folder). |
