@@ -569,9 +569,19 @@ GitHub repository — one with Root Directory `backend`, one with `frontend`.
 
 ### 16.4 CORS and MongoDB Atlas access
 
-- **CORS:** the backend uses `cors()` with the origin taken from `CLIENT_URL`.
-  When `CLIENT_URL` is empty (local development), all origins are allowed.
-  Set `CLIENT_URL` to your frontend URL in production.
+- **CORS:** the backend applies the `cors()` middleware **before** every route.
+  The allowed origins come from `CLIENT_URL`:
+  - It may list **several origins separated by commas**.
+  - Entries are **trimmed** and **trailing slashes are removed**, so
+    `https://my-app.vercel.app/` matches `https://my-app.vercel.app`.
+  - `GET, POST, PUT, PATCH, DELETE, OPTIONS` methods are allowed, and the
+    `Content-Type` and `Authorization` headers are allowed.
+  - `OPTIONS` preflight requests are answered automatically with `204` and the
+    correct `Access-Control-Allow-Origin` header.
+  - When `CLIENT_URL` is empty, every origin is allowed (local development).
+    Localhost origins (`http://localhost:5173`, etc.) are always allowed so
+    `npm run dev` keeps working even when `CLIENT_URL` points at production.
+  - The exact origin is always echoed back — **never** a wildcard `*`.
 - **MongoDB Atlas Network Access:** add `0.0.0.0/0` to the IP Access List so
   the Vercel serverless functions can reach the database. This is the simplest
   option for a class project.
@@ -579,6 +589,37 @@ GitHub repository — one with Root Directory `backend`, one with `frontend`.
   credentials are part of `MONGO_URI`.
 - Never commit API keys or database passwords; keep them in the host dashboards
   and in local `.env` files only (both are git-ignored).
+
+### 16.5 Vercel Deployment Protection (common CORS gotcha)
+
+If the frontend reports
+
+```
+No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+but `GET /api/health` works in a browser tab, the real cause is usually
+**Vercel Deployment Protection**, not the CORS code. Protected deployments
+answer every request with a `302` redirect to `vercel.com/sso-api`, and that
+redirect carries **no** CORS headers, so the browser blocks it.
+
+Fix it in the Vercel dashboard:
+
+1. Open the **backend** project → **Settings** → **Deployment Protection**.
+2. Set **Vercel Authentication** to **Disabled** (and make sure Password
+   Protection is off), so the API is publicly reachable.
+3. Use the project's **stable production domain** (e.g.
+   `https://backend-<scope>.vercel.app`) in the frontend's `VITE_API_URL`,
+   not a deployment-specific URL that changes on every deploy.
+
+You can confirm it is fixed with:
+
+```powershell
+curl.exe -i -H "Origin: https://your-frontend.vercel.app" https://your-backend.vercel.app/api/health
+```
+
+The response must include `access-control-allow-origin: https://your-frontend.vercel.app`
+and must **not** be a `302`.
 
 ---
 
@@ -631,3 +672,4 @@ GitHub repository — one with Root Directory `backend`, one with `frontend`.
 | Phase 7 | Built full React frontend: design system (`index.css`, `App.css`), `services/api.js`, `context/AuthContext.jsx`, components (Navbar, Footer, IdeaCard, InvestorReviewCard, RoastBadge, Loader, ErrorMessage, EmptyState, ProtectedRoute) and pages (Landing, Register, Login, Dashboard, SubmitIdea, IdeaDetails, Leaderboard, MyIdeas, NotFound); routing in `App.jsx`, providers in `main.jsx`; added `frontend/.env.example` and `.env` to `.gitignore`. `npm run build` and `npm run lint` pass. |
 | Phase 8 (prep) | Deployment preparation: added root `.gitignore`, expanded `backend/.gitignore` + `frontend/.gitignore`; sanitized `backend/.env.example` (removed real cluster host, added `CLIENT_URL`); added optional env-based CORS in `backend/index.js`; documented the full Vercel/Vercel deployment guide. |
 | Phase 8 (Vercel fix) | Made the backend Vercel-compatible: `backend/index.js` now `export default app` and only calls `app.listen()` when `process.env.VERCEL` is not set; added a DB-ensure middleware that calls `connectDB()` before routes; rewrote `backend/config/db.js` to cache/reuse the Mongoose connection and throw instead of `process.exit()`. Backend moved from Render to Vercel (no `vercel.json`, no `api/` folder). |
+| Phase 8 (CORS fix) | Hardened CORS in `backend/index.js`: `CLIENT_URL` now supports comma-separated origins with whitespace/trailing-slash trimming; explicit `methods` (`GET,POST,PUT,PATCH,DELETE,OPTIONS`) and `allowedHeaders` (`Content-Type, Authorization`); preflight answered with `204`; localhost origins always allowed for dev; disallowed origins get no header (never a wildcard). Documented the Vercel Deployment Protection `302` gotcha (§16.5). |

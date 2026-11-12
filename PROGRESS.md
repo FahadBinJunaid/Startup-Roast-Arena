@@ -67,6 +67,8 @@ Last updated: Phase 8 (Deployment preparation)
 - ✅ Optional env-based CORS added to `backend/index.js`
 - ✅ Deployment guide written in `PROJECT_GUIDE.md` (§16)
 - ✅ Backend made Vercel-compatible: `export default app`, guarded `app.listen()`, DB-ensure middleware, cached/reusable Mongo connection
+- ✅ CORS hardened: comma-separated `CLIENT_URL`, trim + trailing-slash normalization, explicit methods/headers, 204 preflight, localhost always allowed, no wildcard
+- ⚠️ Backend still returns `302` to `vercel.com/sso-api` → **Vercel Deployment Protection must be disabled** (owner, dashboard)
 - ⬜ Browser manual walkthrough (owner)
 - ⬜ Responsive check (owner)
 - ⬜ GitHub push (owner, manual)
